@@ -3,4 +3,4 @@ pandas
 matplotlib
 seaborn
 openpyxl
-koreanize-matplotlib
+requests
