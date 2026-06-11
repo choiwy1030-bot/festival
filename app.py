@@ -57,7 +57,7 @@ if df_active is not None:
     """
     df_result = pd.read_sql_query(sql_query, conn)
 
-    # --- [3] 데이터 그룹화 (빅3 vs 나머지) ---
+    # --- [3] 데이터 그룹화 ---
     big3_names = ['해운대 모래축제', '해운대 빛축제', '대전 0시 축제']
     df_big3 = df_result[df_result['축제명'].isin(big3_names)].copy()
     df_others = df_result[~df_result['축제명'].isin(big3_names)].head(4).copy()
@@ -65,10 +65,10 @@ if df_active is not None:
     def wrap_text(text):
         return text.replace(' ', '\n')
 
-    # --- [4] 차트 생성 함수 ---
+    # --- [4] 차트 생성 함수 (증감 방향 로직 추가) ---
     def draw_group_chart(df, title, color_active):
         df['축제명_display'] = df['축제명'].apply(wrap_text)
-        fig, ax = plt.subplots(figsize=(10, 6))
+        fig, ax = plt.subplots(figsize=(10, 7))
         
         idx = range(len(df))
         bar_width = 0.35
@@ -79,29 +79,45 @@ if df_active is not None:
         bar1 = ax.bar([i - bar_width/2 for i in idx], b_val, bar_width, label='Before', color='#D3D3D3')
         bar2 = ax.bar([i + bar_width/2 for i in idx], a_val, bar_width, label='Active', color=color_active)
         
-        ax.set_title(title, fontproperties=font_prop, fontsize=15, pad=15)
+        ax.set_title(title, fontproperties=font_prop, fontsize=16, pad=20)
         ax.set_ylabel("방문자 수 (단위: 만 명)", fontproperties=font_prop)
         ax.set_xticks(idx)
         ax.set_xticklabels(df['축제명_display'], fontproperties=font_prop)
         ax.legend()
 
-        # 수치 표시 (글자 없이 숫자만 표시하여 깨짐 방지)
+        max_height = max(a_val.max(), b_val.max())
+        ax.set_ylim(0, max_height * 1.3)
+
         for i in range(len(df)):
-            # 개최월 막대 위 숫자 (소수점 1자리까지)
-            ax.text(i + bar_width/2, a_val.iloc[i], f"{a_val.iloc[i]:.1f}", 
-                    ha='center', va='bottom', fontsize=10, fontweight='bold')
+            # 직전월 수치
+            ax.text(i - bar_width/2, b_val.iloc[i] + (max_height * 0.02), 
+                    f"{b_val.iloc[i]:.1f}", ha='center', va='bottom', fontsize=10, color='#777777')
             
-            # 증감률 표시 (▲ 기호와 숫자만 사용)
+            # 개최월 수치
+            ax.text(i + bar_width/2, a_val.iloc[i] + (max_height * 0.02), 
+                    f"{a_val.iloc[i]:.1f}", ha='center', va='bottom', fontsize=10, fontweight='bold')
+            
+            # --- [핵심 수정] 증감 방향에 따른 화살표 및 색상 변경 ---
             rate = df['증감률'].iloc[i]
-            rate_text = f"▲ {rate}%"
-            ax.text(i + bar_width/2, a_val.iloc[i] * 1.05, rate_text, 
-                    ha='center', va='bottom', color='red' if rate >= 100 else 'indigo', 
-                    fontweight='bold', fontproperties=font_prop, fontsize=11)
+            if rate > 0:
+                rate_text = f"▲ +{rate}%"
+                rate_color = 'red' if rate >= 100 else 'indigo'
+            elif rate < 0:
+                rate_text = f"▼ {rate}%"  # 마이너스 축제는 아래 화살표
+                rate_color = 'blue'       # 감소는 파란색으로 강조
+            else:
+                rate_text = f"{rate}%"
+                rate_color = 'black'
+
+            # 증감률 위치 (수치와 겹치지 않게 더 높게 배치)
+            ax.text(i + bar_width/2, a_val.iloc[i] + (max_height * 0.12), 
+                    rate_text, ha='center', va='bottom', 
+                    color=rate_color, fontweight='bold', fontproperties=font_prop, fontsize=12)
         
         return fig
 
-    # --- [5] 화면 레이아웃 구성 ---
-    st.subheader("📍 방문객 규모별 유입 효과 비교 (Grouped)")
+    # --- [5] 화면 구성 ---
+    st.subheader("📍 방문객 규모별 유입 효과 비교")
     
     col1, col2 = st.columns(2)
     with col1:
@@ -114,18 +130,22 @@ if df_active is not None:
         fig2 = draw_group_chart(df_others, "지역 분산 효과 축제 비교", "#EF553B")
         st.pyplot(fig2)
 
-    # --- [6] SQL 및 인사이트 출력 ---
-    with st.expander("📝 사용된 SQL JOIN Query 확인"):
-        st.code(sql_query, language='sql')
-
-    max_row = df_result.iloc[0]
+    # --- [6] 인사이트 출력 ---
     st.markdown("---")
     st.subheader("💡 데이터 분석 인사이트")
     
+    max_row = df_result.iloc[0]
+    # 감소한 데이터 찾기 (유성 국화축제 등)
+    min_row = df_result[df_result['증감률'] < 0].iloc[0] if any(df_result['증감률'] < 0) else None
+
     c1, c2 = st.columns(2)
     with c1:
         st.info(f"**인사이트 1 — '인구 펌프' 효과:**\n\n"
-                f"**{max_row['축제명']}**의 경우 개최월에 방문자가 **{max_row['증감률']}%** 증가하며 "
-                f"축제가 지역 경제와 유입에 큰 기여를 함을 알 수 있습니다.")
+                f"**{max_row['축제명']}**은 증감률 **{max_row['증감률']}%**로 압도적인 유입을 보였습니다.")
     with c2:
-        st.success(f"**인사이트 2 — 지속 가능성:**\n\n")
+        if min_row is not None:
+            st.warning(f"**인사이트 2 — 마이너스 증감률의 의미:**\n\n"
+                       f"**{min_row['축제명']}**과 같이 증감률이 감소(**{min_row['증감률']}%**)하는 경우, "
+                       f"해당 기간의 경쟁 축제 유무나 외부 요인(날씨, 교통 등)을 분석하여 원인을 파악해야 합니다.")
+        else:
+            st.success("**인사이트 2:** 분석 대상 모든 축제에서 유입 증가세가 나타났습니다.")
