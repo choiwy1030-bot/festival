@@ -6,7 +6,7 @@ import matplotlib.font_manager as fm
 import os
 import requests
 
-# --- [1] 한글 폰트 자동 설정 (가장 확실한 방법) ---
+# --- [1] 한글 폰트 자동 설정 ---
 @st.cache_data
 def download_font():
     url = "https://github.com/google/fonts/raw/main/ofl/nanumgothic/NanumGothic-Regular.ttf"
@@ -20,11 +20,10 @@ def download_font():
 try:
     font_path = download_font()
     font_prop = fm.FontProperties(fname=font_path)
-    # 전역 폰트 설정
     plt.rc('font', family=font_prop.get_name())
     plt.rcParams['axes.unicode_minus'] = False
 except:
-    st.warning("폰트 설정 중 문제가 발생했습니다.")
+    pass
 
 # --- [2] 데이터 로드 및 SQL 처리 ---
 st.set_page_config(page_title="축제 방문객 분석", layout="wide")
@@ -61,9 +60,8 @@ if df_active is not None:
     # --- [3] 데이터 그룹화 (빅3 vs 나머지) ---
     big3_names = ['해운대 모래축제', '해운대 빛축제', '대전 0시 축제']
     df_big3 = df_result[df_result['축제명'].isin(big3_names)].copy()
-    df_others = df_result[~df_result['축제명'].isin(big3_names)].head(4).copy() # 상위 7개를 맞추기 위해 나머지 중 4개 선택
+    df_others = df_result[~df_result['축제명'].isin(big3_names)].head(4).copy()
 
-    # 시각화용 줄바꿈 처리 함수
     def wrap_text(text):
         return text.replace(' ', '\n')
 
@@ -75,27 +73,27 @@ if df_active is not None:
         idx = range(len(df))
         bar_width = 0.35
         
-        # 단위 변환: 만 명
         b_val = df['직전월_방문자수'] / 10000
         a_val = df['개최월_방문자수'] / 10000
         
-        bar1 = ax.bar([i - bar_width/2 for i in idx], b_val, bar_width, label='Before(직전월)', color='#D3D3D3')
-        bar2 = ax.bar([i + bar_width/2 for i in idx], a_val, bar_width, label='Active(개최월)', color=color_active)
+        bar1 = ax.bar([i - bar_width/2 for i in idx], b_val, bar_width, label='Before', color='#D3D3D3')
+        bar2 = ax.bar([i + bar_width/2 for i in idx], a_val, bar_width, label='Active', color=color_active)
         
         ax.set_title(title, fontproperties=font_prop, fontsize=15, pad=15)
         ax.set_ylabel("방문자 수 (단위: 만 명)", fontproperties=font_prop)
         ax.set_xticks(idx)
         ax.set_xticklabels(df['축제명_display'], fontproperties=font_prop)
-        ax.legend(prop=font_prop)
+        ax.legend()
 
-        # 수치 및 증감률 표시
+        # 수치 표시 (글자 없이 숫자만 표시하여 깨짐 방지)
         for i in range(len(df)):
-            # 개최월 막대 위 방문자수
-            ax.text(i + bar_width/2, a_val.iloc[i], f"{a_val.iloc[i]:.1f}만", 
-                    ha='center', va='bottom', fontsize=9, fontweight='bold')
-            # 증감률 표시
+            # 개최월 막대 위 숫자 (소수점 1자리까지)
+            ax.text(i + bar_width/2, a_val.iloc[i], f"{a_val.iloc[i]:.1f}", 
+                    ha='center', va='bottom', fontsize=10, fontweight='bold')
+            
+            # 증감률 표시 (▲ 기호와 숫자만 사용)
             rate = df['증감률'].iloc[i]
-            rate_text = f"▲ +{rate}%"
+            rate_text = f"▲ {rate}%"
             ax.text(i + bar_width/2, a_val.iloc[i] * 1.05, rate_text, 
                     ha='center', va='bottom', color='red' if rate >= 100 else 'indigo', 
                     fontweight='bold', fontproperties=font_prop, fontsize=11)
@@ -106,7 +104,6 @@ if df_active is not None:
     st.subheader("📍 방문객 규모별 유입 효과 비교 (Grouped)")
     
     col1, col2 = st.columns(2)
-    
     with col1:
         st.markdown("#### 🚀 대규모 축제 (Big 3)")
         fig1 = draw_group_chart(df_big3, "주요 대형 축제 방문객 비교", "#636EFA")
@@ -121,17 +118,14 @@ if df_active is not None:
     with st.expander("📝 사용된 SQL JOIN Query 확인"):
         st.code(sql_query, language='sql')
 
-    # 인사이트 계산
     max_row = df_result.iloc[0]
     st.markdown("---")
     st.subheader("💡 데이터 분석 인사이트")
     
-    insight_col1, insight_col2 = st.columns(2)
-    with insight_col1:
-        st.info(f"**인사이트 1 — '인구 펌프'로서의 실효성:**\n\n"
-                f"축제는 외지인을 끌어당기는 강력한 트리거입니다. **{max_row['축제명']}**의 경우 "
-                f"직전월 대비 방문자가 **{max_row['증감률']}%** 증가하며 실질적인 인구 유입 효과를 입증했습니다.")
-    with insight_col2:
-        st.success(f"**인사이트 2 — 단발성 유입의 한계:**\n\n"
-                   f"유입 효과가 강력할수록 축제 종료 후에도 방문이 이어지도록 하는 '체류형 관광 인프라'와 "
-                   f"교통망 연계 정책이 필수적임을 시사합니다.")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.info(f"**인사이트 1 — '인구 펌프' 효과:**\n\n"
+                f"**{max_row['축제명']}**의 경우 개최월에 방문자가 **{max_row['증감률']}%** 증가하며 "
+                f"축제가 지역 경제와 유입에 큰 기여를 함을 알 수 있습니다.")
+    with c2:
+        st.success(f"**인사이트 2 — 지속 가능성:**\n\n"
