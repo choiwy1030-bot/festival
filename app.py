@@ -128,4 +128,4 @@ if df_active is not None:
                 f"**{max_row['축제명']}**의 경우 개최월에 방문자가 **{max_row['증감률']}%** 증가하며 "
                 f"축제가 지역 경제와 유입에 큰 기여를 함을 알 수 있습니다.")
     with c2:
-        st.success(f"**인사이트 2 — 지속 가능성:**\n\n"
+        st.success(f"**인사이트 2 — 지속 가능성:**\n\n")
